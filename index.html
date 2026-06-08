@@ -1,0 +1,2141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPI Guardian — AI Fraud Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Base ───────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --navy:    #060D1A;
+  --navy2:   #0B1628;
+  --navy3:   #0F1F35;
+  --teal:    #00D4A4;
+  --teal2:   #00A880;
+  --amber:   #F5A623;
+  --red:     #FF4757;
+  --green:   #2ECC8A;
+  --white:   #F0F6FF;
+  --muted:   #5A7A9A;
+  --card:    #0D1B2E;
+  --border:  rgba(0,212,164,0.15);
+  --glow:    rgba(0,212,164,0.08);
+}
+html { scroll-behavior: smooth; }
+body {
+  background: var(--navy);
+  color: var(--white);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px;
+  line-height: 1.7;
+  overflow-x: hidden;
+  cursor: none;
+}
+
+/* ── Custom Cursor ──────────────────────────────────────────── */
+#cursor {
+  width: 12px; height: 12px;
+  background: var(--teal);
+  border-radius: 50%;
+  position: fixed; top: 0; left: 0;
+  pointer-events: none; z-index: 9999;
+  transition: transform 0.15s ease;
+  mix-blend-mode: screen;
+}
+#cursor-ring {
+  width: 36px; height: 36px;
+  border: 1.5px solid var(--teal);
+  border-radius: 50%;
+  position: fixed; top: 0; left: 0;
+  pointer-events: none; z-index: 9998;
+  opacity: 0.4;
+  transition: transform 0.4s cubic-bezier(.19,1,.22,1), width 0.3s, height 0.3s, opacity 0.3s;
+}
+body:hover #cursor { opacity: 1; }
+
+/* ── Noise Texture Overlay ──────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 1; opacity: 0.4;
+}
+
+/* ── Grid Lines Background ──────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,164,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,164,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none; z-index: 0;
+}
+
+/* ── Navigation ─────────────────────────────────────────────── */
+nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  z-index: 100;
+  padding: 20px 60px;
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(6,13,26,0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  transition: padding 0.3s;
+}
+nav.scrolled { padding: 14px 60px; }
+.nav-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'Syne', sans-serif;
+  font-size: 20px; font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--white);
+  text-decoration: none;
+}
+.logo-icon {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--teal), var(--teal2));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.nav-links { display: flex; align-items: center; gap: 36px; }
+.nav-links a {
+  color: var(--muted); font-size: 14px; font-weight: 500;
+  text-decoration: none; letter-spacing: 0.02em;
+  transition: color 0.2s;
+  position: relative;
+}
+.nav-links a::after {
+  content: ''; position: absolute; bottom: -3px; left: 0; right: 0;
+  height: 1px; background: var(--teal);
+  transform: scaleX(0); transform-origin: left;
+  transition: transform 0.3s cubic-bezier(.19,1,.22,1);
+}
+.nav-links a:hover { color: var(--white); }
+.nav-links a:hover::after { transform: scaleX(1); }
+.nav-cta {
+  background: var(--teal); color: var(--navy) !important;
+  padding: 9px 22px; border-radius: 6px;
+  font-weight: 600 !important; font-size: 13px !important;
+  transition: background 0.2s, transform 0.2s !important;
+}
+.nav-cta:hover { background: #00f0ba !important; transform: translateY(-1px); }
+.nav-cta::after { display: none !important; }
+
+/* ── Section Base ───────────────────────────────────────────── */
+section { position: relative; z-index: 2; }
+.container { max-width: 1100px; margin: 0 auto; padding: 0 40px; }
+
+/* ── Reveal Animation ───────────────────────────────────────── */
+.reveal {
+  opacity: 0; transform: translateY(28px);
+  transition: opacity 0.7s cubic-bezier(.19,1,.22,1), transform 0.7s cubic-bezier(.19,1,.22,1);
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-5 { transition-delay: 0.5s; }
+.reveal-delay-6 { transition-delay: 0.6s; }
+
+/* ── Hero ───────────────────────────────────────────────────── */
+#hero {
+  min-height: 100vh;
+  display: flex; align-items: center;
+  padding: 120px 0 80px;
+  overflow: hidden;
+}
+.hero-inner {
+  display: grid; grid-template-columns: 1fr 420px;
+  gap: 60px; align-items: center;
+}
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: rgba(0,212,164,0.08);
+  border: 1px solid rgba(0,212,164,0.2);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px; font-weight: 500;
+  color: var(--teal);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  margin-bottom: 24px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.eyebrow-dot {
+  width: 6px; height: 6px;
+  background: var(--teal); border-radius: 50%;
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+.hero-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(42px, 5.5vw, 72px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -2px;
+  margin-bottom: 24px;
+}
+.hero-title .line { display: block; overflow: hidden; }
+.hero-title .line span {
+  display: block;
+  animation: slide-up 0.8s cubic-bezier(.19,1,.22,1) both;
+}
+.hero-title .line:nth-child(2) span { animation-delay: 0.1s; }
+.hero-title .line:nth-child(3) span { animation-delay: 0.2s; }
+@keyframes slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.teal-text { color: var(--teal); }
+.hero-sub {
+  font-size: 17px; color: #7A9AB8;
+  line-height: 1.7; max-width: 480px;
+  margin-bottom: 36px;
+  font-weight: 300;
+}
+.hero-sub strong { color: var(--white); font-weight: 500; }
+.hero-btns { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.btn-primary {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--teal); color: var(--navy);
+  padding: 14px 28px; border-radius: 8px;
+  font-weight: 600; font-size: 15px;
+  text-decoration: none; letter-spacing: -0.2px;
+  transition: all 0.25s;
+  position: relative; overflow: hidden;
+}
+.btn-primary::before {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+  opacity: 0; transition: opacity 0.25s;
+}
+.btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(0,212,164,0.3); }
+.btn-primary:hover::before { opacity: 1; }
+.btn-ghost {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--white); font-size: 15px; font-weight: 500;
+  text-decoration: none; padding: 14px 24px;
+  border: 1px solid var(--border); border-radius: 8px;
+  transition: all 0.25s;
+}
+.btn-ghost:hover { border-color: var(--teal); color: var(--teal); background: var(--glow); }
+.hero-stats {
+  display: flex; gap: 28px; margin-top: 48px;
+  padding-top: 32px;
+  border-top: 1px solid var(--border);
+}
+.stat-item { }
+.stat-num {
+  font-family: 'Syne', sans-serif;
+  font-size: 28px; font-weight: 800;
+  color: var(--white); letter-spacing: -1px;
+}
+.stat-num span { color: var(--teal); }
+.stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* ── Phone Mockup ───────────────────────────────────────────── */
+.phone-wrap {
+  position: relative;
+  display: flex; justify-content: center;
+  animation: float 6s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-14px); }
+}
+.phone-glow {
+  position: absolute; inset: -40px;
+  background: radial-gradient(ellipse at center, rgba(0,212,164,0.12) 0%, transparent 70%);
+  pointer-events: none;
+}
+.phone {
+  width: 280px;
+  background: var(--card);
+  border-radius: 28px;
+  border: 1px solid rgba(0,212,164,0.2);
+  overflow: hidden;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+  position: relative;
+}
+.phone-notch {
+  width: 100px; height: 28px;
+  background: var(--navy);
+  border-radius: 0 0 16px 16px;
+  margin: 0 auto;
+  position: relative; z-index: 2;
+}
+.tg-header {
+  background: #1B6CA8;
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 10px;
+}
+.tg-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--teal), #0099cc);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; color: white;
+  font-family: 'Syne', sans-serif;
+}
+.tg-info { flex: 1; }
+.tg-name { font-size: 13px; font-weight: 600; color: white; }
+.tg-status { font-size: 10px; color: rgba(255,255,255,0.6); }
+.chat-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; min-height: 320px; }
+.msg { max-width: 85%; }
+.msg-user { align-self: flex-end; }
+.msg-bot { align-self: flex-start; }
+.bubble {
+  padding: 8px 12px; border-radius: 12px;
+  font-size: 11.5px; line-height: 1.5;
+}
+.bubble-user {
+  background: #2B5278; color: rgba(255,255,255,0.9);
+  border-bottom-right-radius: 3px;
+}
+.bubble-bot {
+  background: #182533; color: rgba(255,255,255,0.85);
+  border-bottom-left-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.bubble-img {
+  background: #2B5278; color: rgba(255,255,255,0.9);
+  border-bottom-right-radius: 3px;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px;
+}
+.risk-tag {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px; margin-bottom: 4px;
+  letter-spacing: 0.05em;
+}
+.risk-high { background: rgba(255,71,87,0.2); color: #FF4757; border: 1px solid rgba(255,71,87,0.3); }
+.risk-safe { background: rgba(46,204,138,0.2); color: #2ECC8A; border: 1px solid rgba(46,204,138,0.3); }
+.typing { display: flex; gap: 3px; align-items: center; padding: 8px 12px; }
+.typing span {
+  width: 5px; height: 5px; background: var(--muted);
+  border-radius: 50%; animation: typing-dot 1.4s infinite;
+}
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing-dot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+.chat-messages { display: flex; flex-direction: column; gap: 8px; }
+
+/* ── Section Label ──────────────────────────────────────────── */
+.section-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--teal); margin-bottom: 16px;
+}
+.section-eyebrow::before {
+  content: ''; width: 24px; height: 1px; background: var(--teal);
+}
+.section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(32px, 4vw, 48px);
+  font-weight: 800; letter-spacing: -1.5px;
+  line-height: 1.1; margin-bottom: 16px;
+}
+.section-sub {
+  font-size: 17px; color: #6A8AAA;
+  max-width: 520px; font-weight: 300;
+  line-height: 1.7;
+}
+
+/* ── Problem Section ────────────────────────────────────────── */
+#problem { padding: 120px 0; }
+.problem-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 16px; margin-top: 60px;
+}
+.problem-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  position: relative; overflow: hidden;
+  transition: transform 0.3s, border-color 0.3s;
+}
+.problem-card:hover { transform: translateY(-4px); border-color: rgba(0,212,164,0.4); }
+.problem-card::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--teal), transparent);
+  opacity: 0; transition: opacity 0.3s;
+}
+.problem-card:hover::before { opacity: 1; }
+.problem-card.wide { grid-column: span 2; }
+.problem-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--muted);
+  letter-spacing: 0.1em; margin-bottom: 16px;
+}
+.problem-icon {
+  font-size: 36px; margin-bottom: 16px;
+  display: block;
+}
+.problem-card h3 {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px; font-weight: 700;
+  margin-bottom: 10px; letter-spacing: -0.5px;
+}
+.problem-card p { font-size: 14px; color: #6A8AAA; line-height: 1.7; }
+.stat-highlight {
+  font-family: 'Syne', sans-serif;
+  font-size: 42px; font-weight: 800;
+  color: var(--amber); letter-spacing: -2px;
+  display: block; margin-bottom: 8px;
+}
+
+/* ── How It Works ───────────────────────────────────────────── */
+#how { padding: 120px 0; background: var(--navy2); }
+.steps { margin-top: 60px; display: flex; flex-direction: column; gap: 0; }
+.step {
+  display: grid; grid-template-columns: 80px 1fr;
+  gap: 0; align-items: stretch;
+  position: relative;
+}
+.step-left {
+  display: flex; flex-direction: column; align-items: center;
+}
+.step-num {
+  width: 52px; height: 52px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px; font-weight: 500; color: var(--teal);
+  flex-shrink: 0; position: relative; z-index: 1;
+  transition: background 0.3s, border-color 0.3s;
+}
+.step:hover .step-num { background: rgba(0,212,164,0.1); border-color: var(--teal); }
+.step-line {
+  width: 1px; flex: 1; min-height: 20px;
+  background: linear-gradient(to bottom, var(--border), transparent);
+  margin: 4px 0;
+}
+.step:last-child .step-line { display: none; }
+.step-content {
+  padding: 0 0 40px 24px;
+  padding-top: 12px;
+}
+.step-tool {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--teal); margin-bottom: 6px;
+}
+.step-content h3 {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px; font-weight: 700;
+  letter-spacing: -0.5px; margin-bottom: 8px;
+}
+.step-content p { font-size: 15px; color: #6A8AAA; line-height: 1.7; max-width: 500px; }
+
+/* ── Features ───────────────────────────────────────────────── */
+#features { padding: 120px 0; }
+.features-header {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 60px; align-items: end; margin-bottom: 60px;
+}
+.features-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.feat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px; padding: 28px;
+  transition: all 0.3s;
+  position: relative; overflow: hidden;
+}
+.feat-card::after {
+  content: ''; position: absolute;
+  bottom: 0; left: 0; right: 0; height: 2px;
+  background: var(--teal); transform: scaleX(0);
+  transform-origin: left; transition: transform 0.35s cubic-bezier(.19,1,.22,1);
+}
+.feat-card:hover { transform: translateY(-4px); border-color: rgba(0,212,164,0.3); }
+.feat-card:hover::after { transform: scaleX(1); }
+.feat-card.accent { border-color: rgba(0,212,164,0.3); background: rgba(0,212,164,0.04); }
+.feat-icon-wrap {
+  width: 44px; height: 44px;
+  background: rgba(0,212,164,0.1);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; margin-bottom: 18px;
+  transition: background 0.3s;
+}
+.feat-card:hover .feat-icon-wrap { background: rgba(0,212,164,0.18); }
+.feat-card h3 {
+  font-family: 'Syne', sans-serif;
+  font-size: 17px; font-weight: 700;
+  margin-bottom: 8px; letter-spacing: -0.3px;
+}
+.feat-card p { font-size: 13.5px; color: #6A8AAA; line-height: 1.65; }
+
+/* ── Tech Stack ─────────────────────────────────────────────── */
+#stack { padding: 100px 0; background: var(--navy2); }
+.stack-grid {
+  display: flex; flex-wrap: wrap; justify-content: center;
+  gap: 12px; margin-top: 48px;
+}
+.stack-pill {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 40px; padding: 12px 22px;
+  font-size: 14px; font-weight: 500;
+  transition: all 0.25s;
+}
+.stack-pill:hover { border-color: var(--teal); background: rgba(0,212,164,0.06); transform: translateY(-2px); }
+.stack-pill-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+
+/* ── Demo / CTA ─────────────────────────────────────────────── */
+#demo { padding: 120px 0; }
+.demo-inner {
+  display: grid; grid-template-columns: 1fr 380px;
+  gap: 80px; align-items: center;
+}
+.verdict-showcase {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.verdict-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px 24px;
+  display: flex; gap: 16px; align-items: flex-start;
+  transition: all 0.3s;
+}
+.verdict-card:hover { transform: translateX(6px); border-color: rgba(0,212,164,0.3); }
+.verdict-icon {
+  width: 40px; height: 40px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.v-high { background: rgba(255,71,87,0.15); }
+.v-med  { background: rgba(245,166,35,0.15); }
+.v-safe { background: rgba(46,204,138,0.15); }
+.verdict-info h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 500; margin-bottom: 4px;
+}
+.verdict-info p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.vh { color: var(--red); }
+.vm { color: var(--amber); }
+.vs { color: var(--green); }
+
+/* ── FAQ ────────────────────────────────────────────────────── */
+#faq { padding: 120px 0; background: var(--navy2); }
+.faq-list { margin-top: 48px; max-width: 720px; margin-left: auto; margin-right: auto; }
+.faq-item {
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+.faq-q {
+  width: 100%; background: none; border: none;
+  color: var(--white); cursor: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 0; gap: 16px; text-align: left;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 16px; font-weight: 500;
+  transition: color 0.2s;
+}
+.faq-q:hover { color: var(--teal); }
+.faq-icon {
+  width: 28px; height: 28px;
+  border: 1px solid var(--border); border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; font-size: 16px;
+  transition: all 0.3s; color: var(--teal);
+}
+.faq-item.open .faq-icon { transform: rotate(45deg); border-color: var(--teal); background: rgba(0,212,164,0.1); }
+.faq-a {
+  max-height: 0; overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(.19,1,.22,1), padding 0.3s;
+  font-size: 15px; color: #6A8AAA; line-height: 1.75;
+}
+.faq-item.open .faq-a { max-height: 200px; padding-bottom: 20px; }
+
+/* ── Final CTA ──────────────────────────────────────────────── */
+#cta {
+  padding: 120px 0;
+  text-align: center;
+  position: relative; overflow: hidden;
+}
+#cta::before {
+  content: ''; position: absolute;
+  top: 50%; left: 50%; transform: translate(-50%,-50%);
+  width: 600px; height: 600px;
+  background: radial-gradient(ellipse, rgba(0,212,164,0.08) 0%, transparent 70%);
+  pointer-events: none;
+}
+.cta-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(36px, 5vw, 64px);
+  font-weight: 800; letter-spacing: -2px;
+  line-height: 1.05; margin-bottom: 20px;
+}
+.cta-sub {
+  font-size: 18px; color: #6A8AAA;
+  max-width: 440px; margin: 0 auto 36px;
+  font-weight: 300;
+}
+.cta-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+.tg-btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: #229ED9; color: white;
+  padding: 16px 32px; border-radius: 10px;
+  font-size: 16px; font-weight: 600;
+  text-decoration: none;
+  transition: all 0.25s;
+}
+.tg-btn:hover { background: #1D8BC2; transform: translateY(-2px); box-shadow: 0 12px 32px rgba(34,158,217,0.3); }
+
+/* ── Footer ─────────────────────────────────────────────────── */
+footer {
+  padding: 36px 0; border-top: 1px solid var(--border);
+  position: relative; z-index: 2;
+}
+.footer-inner {
+  display: flex; align-items: center; justify-content: space-between;
+}
+.footer-note { font-size: 13px; color: var(--muted); }
+.footer-note a { color: var(--teal); text-decoration: none; }
+.footer-badge {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; color: var(--muted); letter-spacing: 0.05em;
+}
+.footer-badge::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green); animation: pulse-dot 2s infinite;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--navy); }
+::-webkit-scrollbar-thumb { background: rgba(0,212,164,0.3); border-radius: 2px; }
+
+/* ── Animated counter ───────────────────────────────────────── */
+.counter { display: inline-block; }
+
+/* ── Live Analyzer ──────────────────────────────────────────── */
+#analyzer { padding: 110px 0; background: var(--navy2); }
+.analyzer-header {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 56px; align-items: end; margin-bottom: 44px;
+}
+.analyzer-grid {
+  display: grid; grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 20px; align-items: stretch;
+}
+.analyzer-panel, .result-panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+}
+.analyzer-panel { display: flex; flex-direction: column; gap: 16px; }
+.upload-box {
+  min-height: 180px;
+  border: 1px dashed rgba(0,212,164,0.35);
+  border-radius: 12px;
+  background: rgba(0,212,164,0.04);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 24px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.upload-box:hover { border-color: var(--teal); background: rgba(0,212,164,0.07); }
+.upload-box input { position: absolute; opacity: 0; width: 0; height: 0; }
+.upload-icon { font-size: 32px; margin-bottom: 10px; }
+.upload-title { color: var(--white); font-weight: 600; line-height: 1.3; }
+.upload-sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.image-preview-wrap {
+  position: relative; display: none;
+  border-radius: 10px; overflow: hidden;
+}
+.image-preview-wrap.show { display: block; }
+#image-preview { width: 100%; display: block; }
+#ocr-canvas {
+  position: absolute; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+#transaction-text {
+  width: 100%; min-height: 150px; resize: vertical;
+  background: var(--navy3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  color: var(--white);
+  font: 14px/1.6 'DM Sans', sans-serif;
+  outline: none;
+}
+#transaction-text:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0,212,164,0.08); }
+#transaction-text::placeholder { color: #54708B; }
+.analyzer-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.privacy-note { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.btn-followup {
+  background: var(--navy3); border: 1px solid var(--border);
+  color: var(--white); padding: 8px 14px; border-radius: 8px;
+  font-size: 12px; font-weight: 500;
+  transition: all 0.2s;
+}
+.btn-followup:hover { border-color: var(--teal); background: var(--glow); }
+.btn-danger {
+  background: rgba(255,71,87,0.15); border: 1px solid rgba(255,71,87,0.3);
+  color: var(--red); padding: 10px 20px; border-radius: 8px;
+  font-size: 13px; font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-danger:hover { background: rgba(255,71,87,0.25); }
+.btn-helpline {
+  display: flex; align-items: center; gap: 12px;
+  background: rgba(255,71,87,0.1); border: 1px solid rgba(255,71,87,0.2);
+  border-radius: 10px; padding: 12px 16px; text-decoration: none;
+  transition: all 0.2s; margin-bottom: 8px;
+}
+.btn-helpline:hover { background: rgba(255,71,87,0.18); border-color: var(--red); }
+.btn-helpline .hl-name { flex:1; font-size:13px; color:var(--muted); line-height:1.3; }
+.btn-helpline .hl-num { font-size:16px; font-weight:700; color:var(--red); letter-spacing:0.5px; }
+.btn-helpline .hl-action {
+  font-size:12px; font-weight:600; color:var(--white);
+  background: var(--red); padding:6px 14px; border-radius:6px;
+}
+
+/* ── Explainability panel ── */
+.explain-toggle {
+  width:100%; display:flex; align-items:center; justify-content:space-between;
+  background:rgba(0,212,164,0.06); border:1px solid rgba(0,212,164,0.12);
+  color:var(--teal); padding:10px 14px; border-radius:8px;
+  font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s;
+}
+.explain-toggle:hover { background:rgba(0,212,164,0.12); }
+.explain-icon { font-size:16px; font-weight:700; transition:transform 0.25s; }
+.explain-toggle.open .explain-icon { transform:rotate(45deg); }
+.explain-body {
+  overflow:hidden; max-height:0; transition:max-height 0.4s cubic-bezier(.19,1,.22,1);
+}
+.explain-body.open { max-height:1200px; }
+.signal-card {
+  display:flex; align-items:flex-start; gap:12px;
+  background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);
+  border-radius:8px; padding:12px 14px; margin-top:8px;
+}
+.signal-icon { font-size:18px; flex-shrink:0; margin-top:1px; }
+.signal-content { flex:1; min-width:0; }
+.signal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.signal-title { font-size:13px; font-weight:600; color:var(--white); }
+.signal-severity { font-size:10px; font-weight:700; padding:2px 8px; border-radius:4px; text-transform:uppercase; letter-spacing:0.05em; }
+.signal-severity.low { background:rgba(46,204,138,0.15); color:var(--green); }
+.signal-severity.medium { background:rgba(245,166,35,0.15); color:var(--amber); }
+.signal-severity.high { background:rgba(255,71,87,0.15); color:var(--red); }
+.signal-severity.critical { background:rgba(255,71,87,0.3); color:#FF6B7A; }
+.signal-desc { font-size:12px; color:var(--muted); line-height:1.5; margin-bottom:8px; }
+.signal-bar-track { height:4px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; }
+.signal-bar-fill { height:100%; border-radius:4px; transition:width 1s cubic-bezier(.19,1,.22,1); }
+.signal-bar-fill.low { background:var(--green); }
+.signal-bar-fill.medium { background:var(--amber); }
+.signal-bar-fill.high { background:var(--red); }
+.signal-bar-fill.critical { background:#FF6B7A; }
+
+.result-panel { display: flex; flex-direction: column; gap: 18px; }
+.result-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.result-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-family: 'JetBrains Mono', monospace; }
+.result-risk { font-size: 32px; font-weight: 800; font-family: 'Syne', sans-serif; letter-spacing: -1px; }
+.result-risk.idle { color: var(--muted); }
+.result-risk.high { color: var(--red); }
+.result-risk.medium { color: var(--amber); }
+.result-risk.safe { color: var(--green); }
+.confidence-gauge { width: 80px; height: 80px; flex-shrink: 0; }
+.confidence-gauge svg { width: 100%; height: 100%; }
+.gauge-bg { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 6; }
+.gauge-fg { fill: none; stroke: var(--teal); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 1.2s cubic-bezier(.19,1,.22,1), stroke 0.3s; transform: rotate(-90deg); transform-origin: center; }
+#gauge-text { font-size: 18px; font-family: 'JetBrains Mono', monospace; fill: var(--white); font-weight: 600; }
+.result-fields { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.result-fields div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.result-fields span { color: var(--muted); }
+.result-fields strong { color: var(--white); }
+.report-heading {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--teal); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+}
+.result-reasons { list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #7A9AB8; line-height: 1.6; }
+.result-reasons li::before { content: '› '; color: var(--teal); }
+.bilingual-row {
+  display: grid; grid-template-columns: 1fr 1px 1fr;
+  gap: 16px; align-items: start;
+}
+.bilingual-divider { width: 1px; background: var(--border); align-self: stretch; }
+.bilingual-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-family: 'JetBrains Mono', monospace; margin-bottom: 6px; }
+.bilingual-en, .bilingual-hi { font-size: 13px; line-height: 1.6; color: var(--white); }
+.hindi-box { background: rgba(0,212,164,0.04); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.7; color: #7A9AB8; }
+#reanalyzing-indicator { color: var(--muted); font-size: 13px; margin-top: 8px; }
+#report-status { font-size: 13px; margin-top: 8px; }
+.skeleton-card { background: var(--navy3); border-radius: 8px; padding: 12px; }
+.skeleton { background: rgba(255,255,255,0.06); border-radius: 4px; height: 12px; margin-bottom: 8px; animation: pulse 1.5s infinite; }
+.skeleton.label { width: 40%; height: 8px; }
+.skeleton.short { width: 60%; }
+.skeleton-reason { background: rgba(255,255,255,0.06); border-radius: 4px; height: 10px; margin-bottom: 6px; animation: pulse 1.5s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ── Dashboard ──────────────────────────────────────────────── */
+#dashboard { padding: 120px 0; }
+.dashboard-grid {
+  display: grid; grid-template-columns: 2fr 1fr;
+  gap: 20px; margin-top: 48px;
+}
+.dashboard-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px; padding: 24px;
+}
+.dashboard-card.full { grid-column: 1 / -1; }
+.stat-cards {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px;
+  text-align: center;
+}
+.stat-card-val {
+  font-family: 'Syne', sans-serif;
+  font-size: 28px; font-weight: 800;
+  color: var(--white); letter-spacing: -1px;
+  margin-bottom: 4px;
+}
+.stat-card-label { font-size: 11px; color: var(--muted); }
+#live-log-wrap { max-height: 200px; overflow-y: auto; margin-top: 12px; }
+#live-log-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'JetBrains Mono', monospace; }
+#live-log-wrap th { text-align: left; padding: 6px; color: var(--muted); font-weight: 400; border-bottom: 1px solid var(--border); }
+#risk-chart { height: 180px; }
+.top-patterns { margin-top: 16px; }
+.pattern-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 13px;
+}
+.pattern-item .count { color: var(--teal); font-family: 'JetBrains Mono', monospace; font-size: 11px; margin-left: auto; }
+
+@media (max-width: 900px) {
+  .hero-inner, .features-header, .demo-inner, .analyzer-header, .analyzer-grid { grid-template-columns: 1fr; }
+  .phone-wrap { display: none; }
+  .problem-grid { grid-template-columns: 1fr; }
+  .problem-card.wide { grid-column: span 1; }
+  .features-grid { grid-template-columns: 1fr 1fr; }
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .stat-cards { grid-template-columns: 1fr 1fr; }
+  .bilingual-row { grid-template-columns: 1fr; gap: 12px; }
+  .bilingual-divider { display: none; }
+  nav { padding: 16px 24px; }
+  .nav-links { display: none; }
+  .container { padding: 0 20px; }
+}
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<!-- ── NAV ── -->
+<nav id="navbar">
+  <a href="#" class="nav-logo">
+    <div class="logo-icon">🛡</div>
+    UPI Guardian
+  </a>
+  <div class="nav-links">
+    <a href="#problem">Problem</a>
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#analyzer">Analyze</a>
+    <a href="#dashboard">Dashboard</a>
+    <a href="#faq">FAQ</a>
+    <a href="#analyzer" class="nav-cta">Check a payment →</a>
+  </div>
+</nav>
+
+<!-- ── HERO ── -->
+<section id="hero">
+  <div class="container">
+    <div class="hero-inner">
+      <div>
+        <div class="hero-eyebrow reveal">
+          <span class="eyebrow-dot"></span>
+          AI-Powered · FinTech · Cybersecurity
+        </div>
+        <h1 class="hero-title">
+          <span class="line"><span>Before you pay,</span></span>
+          <span class="line"><span><span class="teal-text">ask the AI.</span></span></span>
+          <span class="line"><span>Stay safe.</span></span>
+        </h1>
+        <p class="hero-sub reveal reveal-delay-2">
+          Upload any <strong>UPI payment screenshot</strong> or paste transaction details.
+          Get a fraud verdict in <strong>5 seconds</strong> — no app install, no signup, no trust issues.
+        </p>
+        <div class="hero-btns reveal reveal-delay-3">
+          <a href="#analyzer" class="btn-primary">
+            🛡 Check a payment now
+          </a>
+        </div>
+        <div class="hero-stats reveal reveal-delay-4">
+          <div class="stat-item">
+            <div class="stat-num"><span class="counter" data-target="18">0</span>B<span>+</span></div>
+            <div class="stat-label">UPI transactions/month</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num">₹<span class="counter" data-target="2145">0</span>Cr</div>
+            <div class="stat-label">Lost to fraud FY24</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-num"><span class="counter" data-target="0">0</span></div>
+            <div class="stat-label">Consumer check tools exist</div>
+          </div>
+        </div>
+      </div>
+      <!-- Phone -->
+      <div class="phone-wrap reveal reveal-delay-2">
+        <div class="phone-glow"></div>
+        <div class="phone">
+          <div class="phone-notch"></div>
+          <div class="tg-header">
+            <div class="tg-avatar">U</div>
+            <div class="tg-info">
+              <div class="tg-name">UPI Guardian Bot</div>
+              <div class="tg-status">● online</div>
+            </div>
+          </div>
+          <div class="chat-body" id="chat-demo">
+            <div class="chat-messages" id="chat-msgs"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── PROBLEM ── -->
+<section id="problem">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-eyebrow">The Problem</div>
+      <h2 class="section-title">India's biggest payment<br>has no safety net</h2>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-card reveal reveal-delay-1">
+        <div class="problem-num">01 / SCAM TACTICS</div>
+        <span class="problem-icon">📱</span>
+        <h3>Fake QR codes everywhere</h3>
+        <p>Fraudsters paste fake QR codes over merchant stickers, or send payment requests with lookalike merchant names designed to fool users in seconds.</p>
+      </div>
+      <div class="problem-card reveal reveal-delay-2">
+        <div class="problem-num">02 / ZERO PROTECTION</div>
+        <span class="problem-icon">🔒</span>
+        <h3>No consumer-facing tool exists</h3>
+        <p>NPCI has no pre-payment fraud check. Banks alert you after the money is already gone. There is literally zero real-time verification available.</p>
+      </div>
+      <div class="problem-card wide reveal reveal-delay-3">
+        <div class="problem-num">03 / SCALE OF DAMAGE</div>
+        <div style="display:flex;gap:48px;align-items:center;flex-wrap:wrap">
+          <div>
+            <span class="stat-highlight">₹2,145 Cr</span>
+            <h3>Lost to UPI fraud in FY24</h3>
+            <p style="max-width:380px">Fraud cases grew 85% YoY. Tier-2 and tier-3 city users — least digitally literate — are targeted the most. Nobody pastes their own UPI ID suspiciously, but <strong style="color:var(--white)">everyone screenshots</strong> a payment request before paying.</p>
+          </div>
+          <div style="flex:1;min-width:200px">
+            <div style="background:rgba(255,71,87,0.08);border:1px solid rgba(255,71,87,0.2);border-radius:12px;padding:20px">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--red);margin-bottom:10px;letter-spacing:0.08em">FRAUD GROWTH RATE</div>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--muted)">FY22</span><span style="color:var(--white)">₹877 Cr</span></div>
+                  <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px"><div style="height:4px;width:41%;background:var(--red);opacity:0.5;border-radius:2px"></div></div>
+                </div>
+                <div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--muted)">FY23</span><span style="color:var(--white)">₹1,159 Cr</span></div>
+                  <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px"><div style="height:4px;width:54%;background:var(--red);opacity:0.7;border-radius:2px"></div></div>
+                </div>
+                <div>
+                  <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:var(--muted)">FY24</span><span style="color:var(--red);font-weight:600">₹2,145 Cr</span></div>
+                  <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:2px"><div style="height:4px;width:100%;background:var(--red);border-radius:2px;animation:bar-grow 1.5s ease both 0.5s"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOW IT WORKS ── -->
+<section id="how">
+  <div class="container">
+    <div class="reveal" style="text-align:center;margin-bottom:60px">
+      <div class="section-eyebrow" style="justify-content:center">How it works</div>
+      <h2 class="section-title">5 steps. 5 seconds.</h2>
+      <p class="section-sub" style="margin:0 auto">Fully automated pipeline — upload an image, the server calls NVIDIA NIM, and you get a verdict in seconds.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:60px;align-items:center">
+      <div class="steps">
+        <div class="step reveal reveal-delay-1">
+          <div class="step-left">
+            <div class="step-num">01</div>
+            <div class="step-line"></div>
+          </div>
+          <div class="step-content">
+            <div class="step-tool">Web Upload</div>
+            <h3>User uploads a screenshot</h3>
+            <p>Any UPI payment request, QR scan, or forwarded suspicious message. Zero friction — no typing, no copying IDs.</p>
+          </div>
+        </div>
+        <div class="step reveal reveal-delay-2">
+          <div class="step-left">
+            <div class="step-num">02</div>
+            <div class="step-line"></div>
+          </div>
+          <div class="step-content">
+            <div class="step-tool">Python Backend</div>
+            <h3>Server routes the image to NVIDIA NIM</h3>
+            <p>Upload triggers a POST to the server. Image + fraud prompt sent to <strong>meta/llama-3.2-90b-vision-instruct</strong> via NVIDIA NIM API.</p>
+          </div>
+        </div>
+        <div class="step reveal reveal-delay-3">
+          <div class="step-left">
+            <div class="step-num">03</div>
+            <div class="step-line"></div>
+          </div>
+          <div class="step-content">
+            <div class="step-tool">NVIDIA NIM API</div>
+            <h3>AI extracts + analyses</h3>
+            <p>OCR + fraud pattern reasoning in one call. Extracts UPI ID, merchant name, amount, and flags risk signals using <strong>meta/llama-3.2-90b-vision-instruct</strong>.</p>
+          </div>
+        </div>
+        <div class="step reveal reveal-delay-4">
+          <div class="step-left">
+            <div class="step-num">04</div>
+            <div class="step-line"></div>
+          </div>
+          <div class="step-content">
+            <div class="step-tool">In-Memory Database</div>
+            <h3>Check logged to fraud database</h3>
+            <p>Every scan appended to the server's in-memory log. Builds a session-based scam database (resets on server restart).</p>
+          </div>
+        </div>
+        <div class="step reveal reveal-delay-5">
+          <div class="step-left">
+            <div class="step-num">05</div>
+            <div class="step-line"></div>
+          </div>
+          <div class="step-content">
+            <div class="step-tool">Result Display</div>
+            <h3>Verdict displayed instantly</h3>
+            <p>Risk badge + confidence gauge + bullet reasons + bilingual verdict — back to the user in under 5 seconds.</p>
+          </div>
+        </div>
+      </div>
+      <!-- Mini dashboard -->
+      <div class="reveal reveal-delay-3">
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;font-family:'JetBrains Mono',monospace">
+          <div style="font-size:10px;color:var(--teal);letter-spacing:0.1em;margin-bottom:16px">SERVER REQUEST LOG</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(0,212,164,0.05);border-radius:8px;border:1px solid rgba(0,212,164,0.1)">
+              <span style="color:var(--green);font-size:11px">✓</span>
+              <span style="font-size:11px;color:var(--muted);flex:1">Image uploaded & encoded</span>
+              <span style="font-size:10px;color:var(--teal)">0ms</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(0,212,164,0.05);border-radius:8px;border:1px solid rgba(0,212,164,0.1)">
+              <span style="color:var(--green);font-size:11px">✓</span>
+              <span style="font-size:11px;color:var(--muted);flex:1">POST /api/analyze received</span>
+              <span style="font-size:10px;color:var(--teal)">120ms</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(0,212,164,0.05);border-radius:8px;border:1px solid rgba(0,212,164,0.1)">
+              <span style="color:var(--green);font-size:11px">✓</span>
+              <span style="font-size:11px;color:var(--muted);flex:1">NVIDIA NIM API called</span>
+              <span style="font-size:10px;color:var(--teal)">890ms</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(255,71,87,0.08);border-radius:8px;border:1px solid rgba(255,71,87,0.2)">
+              <span style="color:var(--red);font-size:11px">⚠</span>
+              <span style="font-size:11px;color:var(--muted);flex:1">VERDICT: HIGH RISK (91%)</span>
+              <span style="font-size:10px;color:var(--red)">1.2s</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;padding:10px;background:rgba(0,212,164,0.05);border-radius:8px;border:1px solid rgba(0,212,164,0.1)">
+              <span style="color:var(--green);font-size:11px">✓</span>
+              <span style="font-size:11px;color:var(--muted);flex:1">Log saved + result rendered</span>
+              <span style="font-size:10px;color:var(--teal)">1.4s</span>
+            </div>
+          </div>
+          <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:10px;color:var(--muted)">Total execution time</span>
+            <span style="font-size:14px;color:var(--green);font-weight:500">1.4 seconds</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FEATURES ── -->
+<section id="features">
+  <div class="container">
+    <div class="features-header">
+      <div class="reveal">
+        <div class="section-eyebrow">Features</div>
+        <h2 class="section-title">Built for real<br>Indian users</h2>
+      </div>
+      <p class="section-sub reveal reveal-delay-1">Not tech-savvy hackathon judges. Real people — parents, street vendors, college students in tier-2 cities who use UPI every day.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feat-card accent reveal reveal-delay-1">
+        <div class="feat-icon-wrap">📸</div>
+        <h3>Screenshot & QR input</h3>
+        <p>Send any payment screenshot, QR code scan, or forwarded message. Exactly how users already behave before every suspicious payment.</p>
+      </div>
+      <div class="feat-card reveal reveal-delay-2">
+        <div class="feat-icon-wrap">🧠</div>
+        <h3>Claude Vision + reasoning</h3>
+        <p>OCR and fraud pattern analysis in one API call. No separate ML model needed. Claude explains its reasoning in plain language.</p>
+      </div>
+      <div class="feat-card reveal reveal-delay-3">
+        <div class="feat-icon-wrap">⚡</div>
+        <h3>5-second verdict</h3>
+        <p>HIGH RISK / MEDIUM / SAFE with confidence score and 2–3 bullet reasons. Works faster than your hesitation.</p>
+      </div>
+      <div class="feat-card reveal reveal-delay-1">
+        <div class="feat-icon-wrap">💬</div>
+        <h3>Conversational context</h3>
+        <p>Bot asks "how did you receive this?" — WhatsApp forward, unknown caller, merchant QR. Context sharpens the AI's risk score dramatically.</p>
+      </div>
+      <div class="feat-card reveal reveal-delay-2">
+        <div class="feat-icon-wrap">🇮🇳</div>
+        <h3>English + Hindi output</h3>
+        <p>Verdict and reasoning delivered in both languages. Designed for the 80% of UPI users who think in Hindi, not English.</p>
+      </div>
+      <div class="feat-card reveal reveal-delay-3">
+        <div class="feat-icon-wrap">📊</div>
+        <h3>Community fraud database</h3>
+        <p>Every check logged anonymously. Recurring scam patterns surface automatically — the network gets smarter with every scan.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TECH STACK ── -->
+<section id="stack">
+  <div class="container">
+    <div class="reveal" style="text-align:center">
+      <div class="section-eyebrow" style="justify-content:center">Tech Stack</div>
+      <h2 class="section-title">100% no-code.<br>Production-ready in 48h.</h2>
+    </div>
+    <div class="stack-grid reveal reveal-delay-1">
+      <div class="stack-pill">
+        <div class="stack-pill-dot" style="background:#229ED9"></div>
+        Python HTTP Server
+      </div>
+      <div class="stack-pill">
+        <div class="stack-pill-dot" style="background:#F5A623"></div>
+        NVIDIA NIM API
+      </div>
+      <div class="stack-pill">
+        <div class="stack-pill-dot" style="background:#00D4A4"></div>
+        meta/llama-3.2-90b-vision-instruct
+      </div>
+      <div class="stack-pill">
+        <div class="stack-pill-dot" style="background:#34A853"></div>
+        Chart.js + html2canvas
+      </div>
+      <div class="stack-pill">
+        <div class="stack-pill-dot" style="background:#7B68EE"></div>
+        Vanilla HTML/CSS/JS
+      </div>
+      <div class="stack-pill">
+        <div class="stack-pill-dot" style="background:#FF6B6B"></div>
+        NPCI Helpline Integration
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── VERDICT DEMO ── -->
+<section id="demo">
+  <div class="container">
+    <div class="demo-inner">
+      <div>
+        <div class="section-eyebrow reveal">Live Verdicts</div>
+        <h2 class="section-title reveal reveal-delay-1">Three outcomes.<br>Always clear.</h2>
+        <p class="section-sub reveal reveal-delay-2" style="margin-bottom:36px">No jargon. No confusion. Just an instant answer to the question you're already asking — <em>is this safe to pay?</em></p>
+        <div class="verdict-showcase">
+          <div class="verdict-card reveal reveal-delay-1">
+            <div class="verdict-icon v-high">⚠️</div>
+            <div class="verdict-info">
+              <h4 class="vh">HIGH RISK — 91% confident</h4>
+              <p>UPI ID registered 2 days ago · "cashprize" pattern matches 47 known scams · ₹1 amount = verify-then-drain tactic. <strong style="color:var(--red)">Do not pay.</strong></p>
+            </div>
+          </div>
+          <div class="verdict-card reveal reveal-delay-2">
+            <div class="verdict-icon v-med">⚡</div>
+            <div class="verdict-info">
+              <h4 class="vm">MEDIUM RISK — 62% confident</h4>
+              <p>Merchant name slightly differs from VPA · No prior transaction history · Amount is unusually round. Proceed with caution — verify offline first.</p>
+            </div>
+          </div>
+          <div class="verdict-card reveal reveal-delay-3">
+            <div class="verdict-icon v-safe">✅</div>
+            <div class="verdict-info">
+              <h4 class="vs">LOOKS SAFE — 94% confident</h4>
+              <p>Registered ICICI merchant VPA · Name matches business · Amount consistent with retail. Looks genuine — stay alert anyway.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="reveal reveal-delay-2" style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:28px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--teal);letter-spacing:0.1em;margin-bottom:16px">SAMPLE API RESPONSE</div>
+        <pre style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A9AB8;line-height:1.8;overflow:auto"><code>{
+  <span style="color:var(--teal)">"risk_level"</span>: <span style="color:var(--amber)">"HIGH"</span>,
+  <span style="color:var(--teal)">"confidence"</span>: <span style="color:var(--green)">91</span>,
+  <span style="color:var(--teal)">"upi_id"</span>: <span style="color:var(--amber)">"cashprize88@paytm"</span>,
+  <span style="color:var(--teal)">"merchant"</span>: <span style="color:var(--amber)">"OFFERS.WIN.NOW"</span>,
+  <span style="color:var(--teal)">"amount"</span>: <span style="color:var(--green)">1</span>,
+  <span style="color:var(--teal)">"signals"</span>: [
+    <span style="color:var(--amber)">"ID registered 2 days ago"</span>,
+    <span style="color:var(--amber)">"cashprize = known pattern"</span>,
+    <span style="color:var(--amber)">"₹1 verify-then-drain"</span>
+  ],
+  <span style="color:var(--teal)">"hindi"</span>: <span style="color:var(--amber)">"उच्च जोखिम — भुगतान न करें"</span>,
+  <span style="color:var(--teal)">"action"</span>: <span style="color:var(--red)">"DO_NOT_PAY"</span>
+}</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── LIVE ANALYZER ── -->
+<section id="analyzer">
+  <div class="container">
+    <div class="analyzer-header reveal">
+      <div>
+        <div class="section-eyebrow">Live NVIDIA NIM Analyzer</div>
+        <h2 class="section-title">Upload evidence.<br>Get strict JSON.</h2>
+      </div>
+      <p class="section-sub">Add a UPI screenshot, QR payment screen, transaction proof, suspicious message, or both. The server calls <strong style="color:var(--white);font-weight:500">meta/llama-3.2-90b-vision-instruct</strong> through NVIDIA NIM.</p>
+    </div>
+    <div class="analyzer-grid">
+      <form class="analyzer-panel reveal reveal-delay-1" id="fraud-form">
+        <label class="upload-box" for="upi-image">
+          <input id="upi-image" type="file" accept="image/*">
+          <span class="upload-icon">📸</span>
+          <span class="upload-title" id="upload-title">Choose UPI screenshot or QR image</span>
+          <span class="upload-sub">PNG, JPG, or WebP up to 8 MB</span>
+        </label>
+        <div class="image-preview-wrap" id="image-preview-wrap">
+          <img id="image-preview" alt="Uploaded screenshot">
+          <canvas id="ocr-canvas"></canvas>
+        </div>
+        <textarea id="transaction-text" placeholder="Paste transaction message or describe the payment context. Example: Unknown person on WhatsApp asked me to scan this QR urgently for a refund."></textarea>
+        <div class="analyzer-actions">
+          <button class="btn-primary" type="submit" id="analyze-btn">Analyze transaction</button>
+          <button class="btn-ghost" type="button" id="clear-btn">Clear</button>
+        </div>
+        <p class="privacy-note">The browser sends evidence only to this local server, which forwards it to NVIDIA NIM for analysis.</p>
+      </form>
+      <div class="result-panel reveal reveal-delay-2">
+        <div class="result-top">
+          <div>
+            <div class="result-label">Risk verdict</div>
+            <div class="result-risk idle" id="result-risk">WAITING</div>
+          </div>
+          <div class="confidence-gauge" id="confidence-gauge">
+            <svg viewBox="0 0 90 90">
+              <circle class="gauge-bg" cx="45" cy="45" r="36"/>
+              <circle class="gauge-fg" id="gauge-arc" cx="45" cy="45" r="36"
+                stroke-dasharray="226" stroke-dashoffset="226"/>
+              <text x="45" y="51" text-anchor="middle" id="gauge-text">--</text>
+            </svg>
+          </div>
+        </div>
+        <div id="skeleton-loading" style="display:none">
+          <div class="skeleton-card" style="margin-bottom:10px">
+            <div class="skeleton skeleton-line label"></div>
+            <div class="skeleton skeleton-line"></div>
+          </div>
+          <div class="skeleton-card" style="margin-bottom:10px">
+            <div class="skeleton skeleton-line label"></div>
+            <div class="skeleton skeleton-line"></div>
+          </div>
+          <div class="skeleton-card" style="margin-bottom:10px">
+            <div class="skeleton skeleton-line label"></div>
+            <div class="skeleton skeleton-line short"></div>
+          </div>
+          <div class="skeleton-card" style="margin-bottom:10px">
+            <div class="skeleton skeleton-line label"></div>
+            <div class="skeleton skeleton-line short"></div>
+          </div>
+          <div style="margin-top:16px">
+            <div class="skeleton-reason"></div>
+            <div class="skeleton-reason"></div>
+            <div class="skeleton-reason" style="width:70%"></div>
+          </div>
+        </div>
+        <div class="result-fields" id="result-fields">
+          <div><span>Risk level :</span><strong>--</strong></div>
+          <div><span>Confidence score :</span><strong>--</strong></div>
+          <div><span>UPI ID :</span><strong>--</strong></div>
+          <div><span>Merchant name :</span><strong>--</strong></div>
+          <div><span>Amount :</span><strong>--</strong></div>
+          <div><span>Transaction type :</span><strong>--</strong></div>
+          <div><span>Suggested action :</span><strong>--</strong></div>
+        </div>
+        <div class="report-heading">Reasons</div>
+        <ul class="result-reasons" id="result-reasons">
+          <li>Upload an image or paste transaction context to begin.</li>
+        </ul>
+
+        <div id="explain-section" style="display:none;margin-top:18px">
+          <button class="explain-toggle" id="explain-toggle">🔍 Why did we flag this? <span class="explain-icon">+</span></button>
+          <div class="explain-body" id="explain-body">
+            <div id="signal-cards"></div>
+          </div>
+        </div>
+
+        <div class="report-heading">Verdict in both languages</div>
+        <div class="bilingual-row">
+          <div>
+            <div class="bilingual-label">English</div>
+            <div class="bilingual-en" id="bilingual-en">Awaiting analysis...</div>
+          </div>
+          <div class="bilingual-divider"></div>
+          <div>
+            <div class="bilingual-label">हिन्दी</div>
+            <div class="bilingual-hi" id="bilingual-hi">विश्लेषण की प्रतीक्षा है...</div>
+          </div>
+        </div>
+        <div class="hindi-box" id="hindi-summary">हिंदी सारांश यहाँ दिखाई देगा।</div>
+
+        <div id="followup-section" style="display:none">
+          <div class="report-heading">How did you receive this?</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <button class="btn-followup" data-how="WhatsApp forward">📱 WhatsApp forward</button>
+            <button class="btn-followup" data-how="Unknown caller">📞 Unknown caller</button>
+            <button class="btn-followup" data-how="Merchant QR">🏪 Merchant QR</button>
+          </div>
+          <div id="reanalyzing-indicator" style="display:none">Re-analyzing with context...</div>
+        </div>
+
+        <div id="report-section" style="display:none">
+          <div class="report-heading">Report this scam</div>
+          <button class="btn-danger" id="report-scam-btn">🚨 Report to NPCI</button>
+          <div id="report-status"></div>
+          <div id="helpline-buttons" style="display:none;margin-top:10px">
+            <a class="btn-helpline" href="tel:1930">
+              <span class="hl-name">National Cyber Crime Helpline</span>
+              <span class="hl-num">1930</span>
+              <span class="hl-action">Call Now</span>
+            </a>
+            <a class="btn-helpline" href="tel:18001201740">
+              <span class="hl-name">NPCI UPI Fraud Helpline</span>
+              <span class="hl-num">1800-120-1740</span>
+              <span class="hl-action">Call Now</span>
+            </a>
+          </div>
+        </div>
+
+        <button class="btn-ghost" id="share-btn" style="width:100%;justify-content:center;font-size:13px;border-color:var(--border);display:none">
+          📤 Share result
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── DASHBOARD ── -->
+<section id="dashboard">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-eyebrow">Dashboard</div>
+      <h2 class="section-title">Live fraud intelligence</h2>
+    </div>
+    <div class="stat-cards">
+      <div class="stat-card reveal reveal-delay-1">
+        <div class="stat-card-val" id="dash-total">--</div>
+        <div class="stat-card-label">Total analyses</div>
+      </div>
+      <div class="stat-card reveal reveal-delay-2">
+        <div class="stat-card-val" id="dash-high-risk">--</div>
+        <div class="stat-card-label">High risk detected</div>
+      </div>
+      <div class="stat-card reveal reveal-delay-3">
+        <div class="stat-card-val" id="dash-reported">--</div>
+        <div class="stat-card-label">Reported to NPCI</div>
+      </div>
+    </div>
+    <div class="dashboard-grid">
+      <div class="dashboard-card reveal reveal-delay-1">
+        <div class="report-heading">Your fraud check log</div>
+        <div id="live-log-wrap">
+          <div id="log-empty" style="color:var(--muted);font-size:13px;padding:12px 0">No checks yet. Submit a transaction above.</div>
+          <table style="display:none" id="log-table">
+            <thead><tr><th>Time</th><th>Risk</th><th>Merchant / UPI</th></tr></thead>
+            <tbody id="log-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="dashboard-card reveal reveal-delay-2">
+        <div class="report-heading">Risk history</div>
+        <canvas id="risk-chart"></canvas>
+      </div>
+      <div class="dashboard-card full reveal reveal-delay-1" id="patterns-card" style="display:none">
+        <div class="report-heading">Top patterns</div>
+        <div class="top-patterns" id="top-patterns"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section id="faq">
+  <div class="container">
+    <div class="reveal" style="text-align:center;margin-bottom:0">
+      <div class="section-eyebrow" style="justify-content:center">FAQ</div>
+      <h2 class="section-title">Common questions</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item reveal reveal-delay-1">
+        <button class="faq-q">
+          Do I need to share my UPI ID or phone number?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">Absolutely not. You only upload a screenshot of a payment you received or found suspicious. The app never asks for your personal UPI ID, bank details, or any sensitive information. The image is sent to the server for analysis and is not permanently stored.</div>
+      </div>
+      <div class="faq-item reveal reveal-delay-2">
+        <button class="faq-q">
+          How accurate is the fraud detection?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">Each analysis uses multiple signals: UPI ID patterns, merchant name vetting, amount anomalies, and known scam keywords. Every verdict includes a confidence score. We recommend using it as a strong second opinion — always verify offline for high-value payments.</div>
+      </div>
+      <div class="faq-item reveal reveal-delay-3">
+        <button class="faq-q">
+          Does it work on all UPI apps — PhonePe, GPay, Paytm?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">Yes. You can upload screenshots from any UPI app — PhonePe, Google Pay, Paytm, BHIM, Amazon Pay, or any bank's UPI interface. The AI reads the image regardless of the source app's layout.</div>
+      </div>
+      <div class="faq-item reveal reveal-delay-4">
+        <button class="faq-q">
+          Is my data stored anywhere?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">Only the extracted metadata (risk level, merchant name, UPI handle pattern) is logged locally to your browser's localStorage and to the server's in-memory database. The original image is not stored. The data resets when the server restarts.</div>
+      </div>
+      <div class="faq-item reveal reveal-delay-5">
+        <button class="faq-q">
+          What if the bot makes a mistake on a legit payment?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">False positives can happen with new or informal merchants. The analyzer always shows its confidence score and reasoning — if something looks legit and confidence is below 75%, it's flagged as MEDIUM RISK with a recommendation to verify offline rather than a hard block.</div>
+      </div>
+      <div class="faq-item reveal reveal-delay-6">
+        <button class="faq-q">
+          Is this free to use?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-a">Yes, completely free. Just open this page, upload a screenshot or paste transaction text, and click analyze. No signup, no subscription, no hidden fees.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── CTA ── -->
+<section id="cta">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-eyebrow" style="justify-content:center;margin-bottom:20px">Get started free</div>
+      <h2 class="cta-title">
+        One screenshot.<br>
+        <span class="teal-text">Millions protected.</span>
+      </h2>
+      <p class="cta-sub">The next suspicious payment request you receive — send it to us first. Takes 5 seconds. Could save your money.</p>
+      <div class="cta-btns">
+        <a href="#analyzer" class="btn-primary reveal reveal-delay-1">Check a payment now</a>
+        <a href="#how" class="btn-ghost reveal reveal-delay-2">See how it works →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="container">
+    <div class="footer-inner">
+      <p class="footer-note">Built for <a href="#">Hack The Matrix 2025</a> · FinTech + Cybersecurity · Solo submission</p>
+      <div class="footer-badge">Powered by NVIDIA NIM</div>
+    </div>
+  </div>
+</footer>
+
+<style>
+@keyframes bar-grow {
+  from { width: 0; }
+  to   { width: 100%; }
+}
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+/* ── Cursor ── */
+const cur = document.getElementById('cursor');
+const ring = document.getElementById('cursor-ring');
+let mx = 0, my = 0, rx = 0, ry = 0;
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  cur.style.transform = `translate(${mx - 6}px, ${my - 6}px)`;
+});
+(function animRing() {
+  rx += (mx - rx) * 0.12;
+  ry += (my - ry) * 0.12;
+  ring.style.transform = `translate(${rx - 18}px, ${ry - 18}px)`;
+  requestAnimationFrame(animRing);
+})();
+document.querySelectorAll('a, button').forEach(el => {
+  el.addEventListener('mouseenter', () => {
+    ring.style.width = '52px'; ring.style.height = '52px';
+    ring.style.opacity = '0.6';
+    cur.style.transform += ' scale(0.5)';
+  });
+  el.addEventListener('mouseleave', () => {
+    ring.style.width = '36px'; ring.style.height = '36px';
+    ring.style.opacity = '0.4';
+  });
+});
+
+/* ── Nav scroll ── */
+const navbar = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  navbar.classList.toggle('scrolled', window.scrollY > 40);
+});
+
+/* ── Reveal on scroll ── */
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+/* ── Counters ── */
+function animCounter(el) {
+  const target = parseInt(el.dataset.target);
+  const dur = 1800;
+  const start = performance.now();
+  (function tick(now) {
+    const p = Math.min((now - start) / dur, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(ease * target).toLocaleString('en-IN');
+    if (p < 1) requestAnimationFrame(tick);
+  })(start);
+}
+const counterObs = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) { animCounter(e.target); counterObs.unobserve(e.target); }
+  });
+}, { threshold: 0.5 });
+document.querySelectorAll('.counter').forEach(el => counterObs.observe(el));
+
+/* ── FAQ accordion ── */
+document.querySelectorAll('.faq-q').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const item = btn.parentElement;
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+    if (!isOpen) item.classList.add('open');
+  });
+});
+
+/* ── Live fraud analyzer ── */
+const fraudForm = document.getElementById('fraud-form');
+const imageInput = document.getElementById('upi-image');
+document.querySelector('.upload-box').addEventListener('click', () => imageInput.click());
+const uploadTitle = document.getElementById('upload-title');
+const transactionText = document.getElementById('transaction-text');
+const analyzeBtn = document.getElementById('analyze-btn');
+const clearBtn = document.getElementById('clear-btn');
+const resultRisk = document.getElementById('result-risk');
+const gaugeArc = document.getElementById('gauge-arc');
+const gaugeText = document.getElementById('gauge-text');
+const resultFields = document.getElementById('result-fields');
+const resultReasons = document.getElementById('result-reasons');
+const bilingualEn = document.getElementById('bilingual-en');
+const bilingualHi = document.getElementById('bilingual-hi');
+const hindiSummary = document.getElementById('hindi-summary');
+const followupSection = document.getElementById('followup-section');
+const reportSection = document.getElementById('report-section');
+const shareBtn = document.getElementById('share-btn');
+const imagePreview = document.getElementById('image-preview');
+const imagePreviewWrap = document.getElementById('image-preview-wrap');
+const ocrCanvas = document.getElementById('ocr-canvas');
+const skeleton = document.getElementById('skeleton-loading');
+
+let lastAnalysisId = null;
+
+imageInput.addEventListener('change', () => {
+  const file = imageInput.files[0];
+  if (!file) return;
+  uploadTitle.textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = () => {
+    imagePreview.src = reader.result;
+    imagePreviewWrap.classList.add('show');
+  };
+  reader.readAsDataURL(file);
+});
+
+clearBtn.addEventListener('click', () => {
+  fraudForm.reset();
+  imagePreviewWrap.classList.remove('show');
+  imagePreview.src = '';
+  ocrCanvas.getContext('2d').clearRect(0, 0, ocrCanvas.width, ocrCanvas.height);
+  uploadTitle.textContent = 'Choose UPI screenshot or QR image';
+  resultRisk.className = 'result-risk idle';
+  resultRisk.textContent = 'WAITING';
+  gaugeArc.style.strokeDashoffset = '226';
+  gaugeText.textContent = '--';
+  gaugeArc.style.stroke = 'var(--teal)';
+  resultFields.querySelectorAll('strong').forEach(el => el.textContent = '--');
+  resultReasons.innerHTML = '<li>Upload an image or paste transaction context to begin.</li>';
+  bilingualEn.textContent = 'Awaiting analysis...';
+  bilingualHi.textContent = 'विश्लेषण की प्रतीक्षा है...';
+  hindiSummary.textContent = 'हिंदी सारांश यहाँ दिखाई देगा।';
+  followupSection.style.display = 'none';
+  reportSection.style.display = 'none';
+  document.getElementById('helpline-buttons').style.display = 'none';
+  document.getElementById('report-status').textContent = '';
+  shareBtn.style.display = 'none';
+  lastAnalysisId = null;
+});
+
+fraudForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  analyzeBtn.disabled = true;
+  analyzeBtn.textContent = 'Analyzing...';
+  skeleton.style.display = 'block';
+  resultFields.style.display = 'none';
+  resultReasons.style.display = 'none';
+  document.getElementById('explain-section').style.display = 'none';
+  document.querySelectorAll('.report-heading').forEach(el => el.style.display = 'none');
+  bilingualEn.parentElement.parentElement.style.display = 'none';
+  hindiSummary.style.display = 'none';
+  followupSection.style.display = 'none';
+  reportSection.style.display = 'none';
+  document.getElementById('helpline-buttons').style.display = 'none';
+  document.getElementById('report-status').textContent = '';
+  shareBtn.style.display = 'none';
+  resultRisk.className = 'result-risk idle';
+  resultRisk.textContent = '...';
+
+  const text = transactionText.value.trim();
+  const file = imageInput.files[0];
+  let imageBase64 = null;
+  if (file) {
+    imageBase64 = await compressImage(file, 1200, 0.8);
+  }
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, image: imageBase64 }),
+    });
+    if (!res.ok) throw new Error(`Server error ${res.status}`);
+    const data = await res.json();
+    showVerdict(data);
+    appendToLog(data);
+    updateChart();
+  } catch (err) {
+    resultRisk.textContent = 'ERROR';
+    resultRisk.className = 'result-risk idle';
+    resultReasons.innerHTML = `<li>${err.message}</li>`;
+    resultReasons.style.display = '';
+  } finally {
+    analyzeBtn.disabled = false;
+    analyzeBtn.textContent = 'Analyze transaction';
+    skeleton.style.display = 'none';
+    resultFields.style.display = '';
+    resultReasons.style.display = '';
+    document.querySelectorAll('.report-heading').forEach(el => el.style.display = '');
+    bilingualEn.parentElement.parentElement.style.display = '';
+    hindiSummary.style.display = '';
+  }
+});
+
+function showVerdict(data) {
+  lastAnalysisId = data.analysis_id;
+  const risk = data.risk_level || 'MEDIUM_RISK';
+  const conf = data.confidence_score ?? 0;
+
+  resultRisk.textContent = risk.replace('_', ' ');
+  resultRisk.className = 'result-risk';
+  if (risk === 'HIGH_RISK') resultRisk.classList.add('high');
+  else if (risk === 'SAFE') resultRisk.classList.add('safe');
+  else resultRisk.classList.add('medium');
+
+  const offset = 226 - (conf / 100) * 226;
+  gaugeArc.style.strokeDashoffset = offset;
+  gaugeText.textContent = Math.round(conf);
+  gaugeArc.style.stroke = risk === 'HIGH_RISK' ? 'var(--red)' : risk === 'SAFE' ? 'var(--green)' : 'var(--amber)';
+
+  const fields = {
+    'Risk level': risk.replace('_', ' '),
+    'Confidence score': conf + '%',
+    'UPI ID': data.upi_id || '--',
+    'Merchant name': data.merchant_name || '--',
+    'Amount': data.amount != null ? data.amount : '--',
+    'Transaction type': data.transaction_type || '--',
+    'Suggested action': data.suggested_action || '--',
+  };
+  resultFields.querySelectorAll('strong').forEach((el, i) => {
+    const keys = Object.keys(fields);
+    el.textContent = fields[keys[i]] || '--';
+  });
+
+  resultReasons.innerHTML = (data.reasons || []).map(r => `<li>${escapeHTML(r)}</li>`).join('');
+  if (!data.reasons || !data.reasons.length) {
+    resultReasons.innerHTML = '<li>No specific reasons provided.</li>';
+  }
+
+  bilingualEn.textContent = data.verdict_en || data.risk_level || 'Analysis complete.';
+  bilingualHi.textContent = data.verdict_hi || 'विश्लेषण पूर्ण हुआ।';
+  hindiSummary.textContent = data.hindi_summary || 'हिंदी सारांश उपलब्ध नहीं है।';
+
+  followupSection.style.display = '';
+  if (risk === 'HIGH_RISK') {
+    reportSection.style.display = '';
+  } else {
+    reportSection.style.display = 'none';
+    document.getElementById('helpline-buttons').style.display = 'none';
+    document.getElementById('report-status').textContent = '';
+  }
+  shareBtn.style.display = '';
+
+  if (imagePreview.src && imagePreview.src !== window.location.href) {
+    drawOcrOverlay(data);
+  }
+
+  renderExplainability(data);
+}
+
+document.querySelectorAll('.btn-followup').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    if (!lastAnalysisId) return;
+    const how = btn.dataset.how;
+    const indicator = document.getElementById('reanalyzing-indicator');
+    indicator.style.display = '';
+    try {
+      const res = await fetch('/api/reanalyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ analysis_id: lastAnalysisId, how_received: how }),
+      });
+      if (!res.ok) throw new Error('Re-analysis failed');
+      const data = await res.json();
+      showVerdict(data);
+    } catch (err) {
+      alert('Re-analysis error: ' + err.message);
+    } finally {
+      indicator.style.display = 'none';
+    }
+  });
+});
+
+document.getElementById('report-scam-btn').addEventListener('click', async () => {
+  if (!lastAnalysisId) return;
+  const btn = document.getElementById('report-scam-btn');
+  const status = document.getElementById('report-status');
+  const helplineSection = document.getElementById('helpline-buttons');
+  btn.disabled = true;
+  btn.textContent = 'Reporting...';
+  try {
+    const res = await fetch('/api/report-scam', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis_id: lastAnalysisId }),
+    });
+    if (!res.ok) throw new Error('Report failed');
+    const data = await res.json();
+    status.textContent = '✅ Scam report logged. Contact a helpline now:';
+    status.style.color = 'var(--green)';
+    helplineSection.style.display = '';
+    btn.textContent = '✅ Reported';
+  } catch (err) {
+    status.textContent = 'Error: ' + err.message;
+    status.style.color = 'var(--red)';
+    btn.textContent = '🚨 Report to NPCI';
+    btn.disabled = false;
+  }
+});
+
+shareBtn.addEventListener('click', async () => {
+  const panel = document.querySelector('.result-panel');
+  shareBtn.textContent = 'Preparing...';
+  shareBtn.disabled = true;
+  try {
+    const canvas = await html2canvas(panel, {
+      backgroundColor: '#0D1B2E',
+      scale: 2,
+    });
+    const link = document.createElement('a');
+    link.download = `upi-guardian-verdict-${Date.now()}.png`;
+    link.href = canvas.toDataURL();
+    link.click();
+    shareBtn.textContent = '✅ Image saved!';
+    setTimeout(() => {
+      shareBtn.textContent = '📤 Share result';
+      shareBtn.disabled = false;
+    }, 2500);
+  } catch {
+    shareBtn.textContent = '📤 Share result';
+    shareBtn.disabled = false;
+  }
+});
+
+function compressImage(file, maxDim, quality) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function escapeHTML(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* ── Explainability breakdown ── */
+function renderExplainability(data) {
+  const section = document.getElementById('explain-section');
+  const container = document.getElementById('signal-cards');
+  const toggle = document.getElementById('explain-toggle');
+  const body = document.getElementById('explain-body');
+  if (!section) return;
+
+  const signals = [];
+
+  /* 1. UPI ID Pattern */
+  const upi = (data.upi_id || '').trim();
+  if (!upi) {
+    signals.push({ icon: '🔑', title: 'UPI ID', desc: 'No UPI ID visible in the provided evidence.', severity: 'medium', pct: 40 });
+  } else if (/^[a-z0-9]{8,}@/.test(upi)) {
+    signals.push({ icon: '🔑', title: 'UPI ID', desc: 'ID contains a long random string — typical of throwaway scam accounts.', severity: 'high', pct: 75 });
+  } else if (/@(paytm|ybl|oksbi|icici|hdfcbank|axisbank|okhdfcbank|okaxis|apl|upi)$/i.test(upi)) {
+    signals.push({ icon: '🔑', title: 'UPI ID', desc: 'Standard UPI handle from a recognised bank or provider.', severity: 'low', pct: 15 });
+  } else {
+    signals.push({ icon: '🔑', title: 'UPI ID', desc: `Unusual UPI handle format: ${escapeHTML(upi)}`, severity: 'medium', pct: 50 });
+  }
+
+  /* 2. Merchant Name */
+  const merchant = (data.merchant_name || '').trim();
+  if (!merchant) {
+    signals.push({ icon: '🏪', title: 'Merchant name', desc: 'No merchant name visible — request may not come from a registered business.', severity: 'medium', pct: 45 });
+  } else if (/^(merchant|customer|store|shop|user|person)$/i.test(merchant)) {
+    signals.push({ icon: '🏪', title: 'Merchant name', desc: `Generic name "${escapeHTML(merchant)}" — legitimate merchants usually display a registered business name.`, severity: 'medium', pct: 55 });
+  } else {
+    signals.push({ icon: '🏪', title: 'Merchant name', desc: `Identified as "${escapeHTML(merchant)}".`, severity: 'low', pct: 10 });
+  }
+
+  /* 3. Amount Anomaly */
+  const amt = (data.amount || '').trim();
+  if (!amt) {
+    signals.push({ icon: '💰', title: 'Amount', desc: 'No amount specified — incomplete transaction request.', severity: 'medium', pct: 40 });
+  } else if (/^[₹]?\s*1\s*$/.test(amt.replace(/,/g, ''))) {
+    signals.push({ icon: '💰', title: 'Amount', desc: '₹1 test payment — scammers often use this to verify active UPI IDs before targeting.', severity: 'high', pct: 80 });
+  } else {
+    const num = parseFloat(amt.replace(/[₹,\s]/g, ''));
+    if (num >= 10000) {
+      signals.push({ icon: '💰', title: 'Amount', desc: `High value ₹${num.toLocaleString('en-IN')} — large payment requests from unknown senders are risky.`, severity: 'high', pct: 70 });
+    } else if (num >= 1000) {
+      signals.push({ icon: '💰', title: 'Amount', desc: `₹${num.toLocaleString('en-IN')} — moderate amount, but verify the sender.`, severity: 'medium', pct: 50 });
+    } else {
+      signals.push({ icon: '💰', title: 'Amount', desc: `₹${num.toLocaleString('en-IN')} — typical transaction range.`, severity: 'low', pct: 10 });
+    }
+  }
+
+  /* 4. Transaction Type */
+  const txnType = (data.transaction_type || '').trim().toLowerCase();
+  if (txnType === 'request') {
+    signals.push({ icon: '🔄', title: 'Transaction type', desc: 'This is a payment request — someone is asking you to send money. Always verify the source.', severity: 'medium', pct: 50 });
+  } else if (txnType === 'payment') {
+    signals.push({ icon: '🔄', title: 'Transaction type', desc: 'Outgoing payment record.', severity: 'low', pct: 15 });
+  } else {
+    signals.push({ icon: '🔄', title: 'Transaction type', desc: 'Transaction direction could not be determined.', severity: 'medium', pct: 40 });
+  }
+
+  /* 5. Reasons-based signals */
+  (data.reasons || []).forEach(r => {
+    const reason = r.toLowerCase();
+    if (/unknown|unverified/i.test(reason) && !signals.some(s => s.title === 'Sender identity')) {
+      signals.push({ icon: '👤', title: 'Sender identity', desc: escapeHTML(r), severity: 'high', pct: 70 });
+    }
+    if (/urgent|pressure|immediately|hurry/i.test(reason) && !signals.some(s => s.title === 'Urgency')) {
+      signals.push({ icon: '⏰', title: 'Urgency', desc: 'Urgency language detected — scammers rush victims to skip verification.', severity: 'high', pct: 75 });
+    }
+  });
+
+  /* 6. Overall confidence */
+  const conf = data.confidence_score ?? 0;
+  if (conf >= 80) {
+    signals.push({ icon: '📊', title: 'Analysis confidence', desc: `AI is ${conf}% confident in this verdict based on the evidence provided.`, severity: conf >= 90 ? 'critical' : 'high', pct: conf });
+  } else if (conf >= 50) {
+    signals.push({ icon: '📊', title: 'Analysis confidence', desc: `Moderate confidence (${conf}%) — more evidence would improve accuracy.`, severity: 'medium', pct: conf });
+  } else {
+    signals.push({ icon: '📊', title: 'Analysis confidence', desc: `Low confidence (${conf}%) — the image or text may not contain enough detail.`, severity: 'low', pct: conf });
+  }
+
+  /* Render */
+  section.style.display = '';
+  container.innerHTML = signals.map(s => `
+    <div class="signal-card">
+      <div class="signal-icon">${s.icon}</div>
+      <div class="signal-content">
+        <div class="signal-header">
+          <span class="signal-title">${escapeHTML(s.title)}</span>
+          <span class="signal-severity ${s.severity}">${s.severity}</span>
+        </div>
+        <div class="signal-desc">${escapeHTML(s.desc)}</div>
+        <div class="signal-bar-track">
+          <div class="signal-bar-fill ${s.severity}" style="width:${s.pct}%"></div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  /* Reset toggle */
+  toggle.classList.remove('open');
+  body.classList.remove('open');
+}
+
+/* Explainability toggle */
+document.getElementById('explain-toggle')?.addEventListener('click', () => {
+  const btn = document.getElementById('explain-toggle');
+  const body = document.getElementById('explain-body');
+  btn.classList.toggle('open');
+  body.classList.toggle('open');
+});
+
+/* ── Live session log (localStorage) ── */
+const STORAGE_KEY = 'upi_guardian_log';
+function getLog() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+  catch { return []; }
+}
+function appendToLog(data) {
+  const log = getLog();
+  log.push({
+    ts: new Date().toLocaleTimeString('en-IN'),
+    risk: data.risk_level || 'MEDIUM_RISK',
+    merchant: data.merchant_name || '--',
+    upi: data.upi_id || '--',
+    confidence: data.confidence_score ?? 0,
+  });
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch {}
+  renderLog();
+}
+function renderLog() {
+  const log = getLog();
+  const tbody = document.getElementById('log-body');
+  const empty = document.getElementById('log-empty');
+  const table = document.getElementById('log-table');
+  if (!log.length) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    table.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  table.style.display = '';
+  tbody.innerHTML = log.slice().reverse().map(e => {
+    const color = e.risk === 'HIGH_RISK' ? 'var(--red)' : e.risk === 'SAFE' ? 'var(--green)' : 'var(--amber)';
+    return `<tr>
+      <td style="padding:4px 6px;color:var(--muted);white-space:nowrap">${escapeHTML(e.ts)}</td>
+      <td style="padding:4px 6px;color:${color};font-weight:600">${escapeHTML(e.risk.replace('_', ' '))}</td>
+      <td style="padding:4px 6px;color:var(--white)">${escapeHTML(e.merchant !== '--' ? e.merchant : e.upi)}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Risk history chart (Chart.js) ── */
+let riskChart = null;
+function updateChart() {
+  const log = getLog();
+  const canvas = document.getElementById('risk-chart');
+  if (!canvas) return;
+  if (!riskChart) {
+    riskChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: log.map((_, i) => `#${i + 1}`),
+        datasets: [{
+          label: 'Risk score',
+          data: log.map(e => e.risk === 'HIGH_RISK' ? 3 : e.risk === 'SAFE' ? 1 : 2),
+          backgroundColor: log.map(e =>
+            e.risk === 'HIGH_RISK' ? '#FF4757' : e.risk === 'SAFE' ? '#2ECC8A' : '#F5A623'
+          ),
+          borderRadius: 4,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { min: 0, max: 3.5, display: false },
+          x: {
+            ticks: { color: '#5A7A9A', font: { size: 9 } },
+            grid: { display: false },
+          }
+        },
+      }
+    });
+  } else {
+    riskChart.data.labels = log.map((_, i) => `#${i + 1}`);
+    riskChart.data.datasets[0].data = log.map(e => e.risk === 'HIGH_RISK' ? 3 : e.risk === 'SAFE' ? 1 : 2);
+    riskChart.data.datasets[0].backgroundColor = log.map(e =>
+      e.risk === 'HIGH_RISK' ? '#FF4757' : e.risk === 'SAFE' ? '#2ECC8A' : '#F5A623'
+    );
+    riskChart.update();
+  }
+}
+
+/* ── Dashboard stats ── */
+async function fetchDashboardStats() {
+  try {
+    const res = await fetch('/api/stats');
+    if (!res.ok) return;
+    const data = await res.json();
+    document.getElementById('dash-total').textContent = data.total_analyses ?? 0;
+    document.getElementById('dash-high-risk').textContent = data.high_risk_count ?? 0;
+    document.getElementById('dash-reported').textContent = data.total_scams_reported ?? 0;
+    if (data.top_upi_patterns && data.top_upi_patterns.length) {
+      document.getElementById('patterns-card').style.display = '';
+      document.getElementById('top-patterns').innerHTML =
+        data.top_upi_patterns.slice(0, 5).map(p =>
+          `<div class="pattern-item"><span>${escapeHTML(p.pattern)}</span><span class="count">${p.count}</span></div>`
+        ).join('');
+    }
+  } catch {}
+}
+
+/* ── OCR image overlay ── */
+function drawOcrOverlay(data) {
+  const canvas = ocrCanvas;
+  const img = imagePreview;
+  if (!img.src || img.src === window.location.href) return;
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const fields = [
+    { label: 'UPI ID', value: data.upi_id, color: '#00D4A4' },
+    { label: 'Amount', value: data.amount, color: '#F5A623' },
+    { label: 'Merchant', value: data.merchant_name, color: '#2ECC8A' },
+  ].filter(f => f.value && f.value !== '--');
+
+  if (!fields.length) return;
+  const pad = 12;
+  const lineH = 32;
+  const startY = canvas.height - fields.length * lineH - pad - 10;
+
+  fields.forEach((f, i) => {
+    const y = startY + i * lineH;
+    ctx.fillStyle = f.color + '30';
+    ctx.fillRect(pad, y, canvas.width - pad * 2, lineH - 4);
+    ctx.fillStyle = f.color;
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(`${f.label}:`, pad + 6, y + 18);
+    ctx.fillStyle = '#F0F6FF';
+    ctx.font = '13px monospace';
+    ctx.fillText(String(f.value), pad + 80, y + 18);
+  });
+
+  ctx.strokeStyle = 'rgba(0,212,164,0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad, startY - 4, canvas.width - pad * 2, fields.length * lineH + 4);
+}
+
+renderLog();
+try { updateChart(); } catch {}
+fetchDashboardStats();
+
+/* ── Chat demo animation ── */
+const chatMsgs = document.getElementById('chat-msgs');
+const messages = [
+  { type: 'bot',  text: 'Send me any UPI payment screenshot or QR code and I\'ll check it for fraud instantly.' },
+  { type: 'user', img: true, text: '📎  payment_request.jpg' },
+  { type: 'typing' },
+  { type: 'bot', risk: 'high', text: '⚠️ HIGH RISK (91% confident)\n\ncashprize88@paytm\n— ID created 2 days ago\n— "cashprize" = known scam\n— ₹1 = verify-then-drain\n\n🚫 उच्च जोखिम — भुगतान न करें\n\nCall NPCI: 1800-120-1740' },
+];
+let idx = 0;
+function addMsg() {
+  if (idx >= messages.length) { idx = 0; chatMsgs.innerHTML = ''; setTimeout(addMsg, 3000); return; }
+  const m = messages[idx++];
+  if (m.type === 'typing') {
+    const t = document.createElement('div');
+    t.className = 'msg msg-bot';
+    t.innerHTML = `<div class="bubble bubble-bot typing"><span></span><span></span><span></span></div>`;
+    chatMsgs.appendChild(t);
+    chatMsgs.parentElement.scrollTop = chatMsgs.parentElement.scrollHeight;
+    setTimeout(() => { t.remove(); addMsg(); }, 1800);
+    return;
+  }
+  const div = document.createElement('div');
+  div.className = `msg msg-${m.type}`;
+  let inner = '';
+  if (m.img) {
+    inner = `<div class="bubble bubble-img">${m.text}</div>`;
+  } else if (m.risk === 'high') {
+    inner = `<div class="bubble bubble-bot"><span class="risk-tag risk-high">HIGH RISK</span><br>${m.text.replace(/\n/g,'<br>')}</div>`;
+  } else {
+    inner = `<div class="bubble bubble-${m.type}">${m.text}</div>`;
+  }
+  div.innerHTML = inner;
+  div.style.opacity = '0'; div.style.transform = 'translateY(8px)';
+  div.style.transition = 'all 0.35s cubic-bezier(.19,1,.22,1)';
+  chatMsgs.appendChild(div);
+  requestAnimationFrame(() => { div.style.opacity = '1'; div.style.transform = 'translateY(0)'; });
+  chatMsgs.parentElement.scrollTop = chatMsgs.parentElement.scrollHeight;
+  const delays = [0, 1200, 800, 2200];
+  setTimeout(addMsg, delays[idx - 1] || 1200);
+}
+setTimeout(addMsg, 1000);
+</script>
+</body>
+</html>
