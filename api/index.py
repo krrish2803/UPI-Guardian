@@ -7,6 +7,7 @@ from threading import Lock
 
 import httpx
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 
 app = Flask(__name__)
 
@@ -160,7 +161,7 @@ def normalize_result(raw_text: str) -> dict:
     }
 
 
-async def call_nvidia(messages: list) -> dict:
+def call_nvidia(messages: list) -> dict:
     api_key = (os.environ.get("NVIDIA_API_KEY") or "").strip()
     if not api_key:
         return FALLBACK_RESULT
@@ -172,32 +173,32 @@ async def call_nvidia(messages: list) -> dict:
         "max_tokens": NVIDIA_MAX_TOKENS,
     }
 
-    async with httpx.AsyncClient(timeout=NVIDIA_TIMEOUT) as client:
+    try:
+        resp = httpx.post(
+            NVIDIA_API_URL,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=NVIDIA_TIMEOUT,
+        )
+        resp.raise_for_status()
+        raw = resp.text
         try:
-            resp = await client.post(
-                NVIDIA_API_URL,
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-            resp.raise_for_status()
-            raw = resp.text
-            try:
-                api_resp = resp.json()
-            except json.JSONDecodeError:
-                print("WARN: Non-JSON response from NVIDIA:", raw[:500], flush=True)
-                return FALLBACK_RESULT
-        except httpx.HTTPStatusError as e:
-            detail = e.response.text[:500]
-            print("NVIDIA HTTPError:", detail, flush=True)
-            return {"error": "NVIDIA NIM request failed.", "detail": detail, "_status": e.response.status_code}
-        except httpx.TimeoutException:
-            return {"error": "NVIDIA NIM request timed out.", "_status": 504}
-        except httpx.RequestError as e:
-            traceback.print_exc()
-            return {"error": "Could not reach NVIDIA NIM.", "detail": str(e), "_status": 502}
+            api_resp = resp.json()
+        except json.JSONDecodeError:
+            print("WARN: Non-JSON response from NVIDIA:", raw[:500], flush=True)
+            return FALLBACK_RESULT
+    except httpx.HTTPStatusError as e:
+        detail = e.response.text[:500]
+        print("NVIDIA HTTPError:", detail, flush=True)
+        return {"error": "NVIDIA NIM request failed.", "detail": detail, "_status": e.response.status_code}
+    except httpx.TimeoutException:
+        return {"error": "NVIDIA NIM request timed out.", "_status": 504}
+    except httpx.RequestError as e:
+        traceback.print_exc()
+        return {"error": "Could not reach NVIDIA NIM.", "detail": str(e), "_status": 502}
 
     try:
         raw_content = api_resp["choices"][0]["message"]["content"]
@@ -266,7 +267,7 @@ def handle_stats():
 
 
 @app.route("/api/analyze", methods=["POST"])
-async def handle_analyze():
+def handle_analyze():
     api_key = (os.environ.get("NVIDIA_API_KEY") or "").strip()
     if not api_key:
         return json_error("NVIDIA_API_KEY is not set.", 500)
@@ -307,7 +308,7 @@ async def handle_analyze():
 
 
 @app.route("/api/reanalyze", methods=["POST"])
-async def handle_reanalyze():
+def handle_reanalyze():
     api_key = (os.environ.get("NVIDIA_API_KEY") or "").strip()
     if not api_key:
         return json_error("NVIDIA_API_KEY is not set.", 500)
