@@ -3,10 +3,11 @@ import os
 import traceback
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 from threading import Lock
 
 import httpx
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -245,6 +246,22 @@ def json_error(msg: str, status: int):
 
 
 # ── Routes ──
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent
+
+
+@app.route("/")
+def serve_frontend():
+    return send_from_directory(str(FRONTEND_DIR), "index.html")
+
+
+@app.route("/<path:path>")
+def serve_static(path):
+    file = FRONTEND_DIR / path
+    if file.is_file():
+        return send_from_directory(str(FRONTEND_DIR), path)
+    return send_from_directory(str(FRONTEND_DIR), "index.html")
+
 
 @app.route("/api/stats")
 def handle_stats():
