@@ -1,8 +1,4 @@
 {
-  "buildCommand": null,
-  "devCommand": null,
-  "framework": null,
-  "outputDirectory": ".",
   "builds": [
     {
       "src": "api/index.py",
@@ -13,16 +9,5 @@
   "routes": [
     { "src": "/api/(.*)", "dest": "api/index.py" },
     { "src": "/(.*)", "dest": "/$1" }
-  ],
-  "functions": {
-    "api/index.py": {
-      "memory": 512,
-      "maxDuration": 60
-    }
-  },
-  "env": {
-    "NVIDIA_MODEL": "meta/llama-3.2-90b-vision-instruct",
-    "NVIDIA_TIMEOUT_SECONDS": "240",
-    "NVIDIA_MAX_TOKENS": "800"
-  }
+  ]
 }
