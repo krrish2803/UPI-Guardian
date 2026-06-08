@@ -10,6 +10,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
 # ── Config ──
 NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
@@ -299,7 +300,7 @@ def handle_analyze():
         {"role": "user", "content": content},
     ]
 
-    result = await call_nvidia(messages)
+    result = call_nvidia(messages)
     if "_status" in result:
         return jsonify(result), result.pop("_status")
 
@@ -343,7 +344,7 @@ def handle_reanalyze():
         {"role": "user", "content": context},
     ]
 
-    result = await call_nvidia(messages)
+    result = call_nvidia(messages)
     if "_status" in result:
         return jsonify(result), result.pop("_status")
 
